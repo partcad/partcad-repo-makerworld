@@ -175,8 +175,11 @@ class MakerWorld(rm.Site):
             ],
             "guide": [
                 {
+                    # A Material UI button, which nothing but its text tells
+                    # apart from the others (seen on makerworld.com/en).
                     "url": "https://makerworld.com/*",
-                    "selector": "a[href*='login'], button[class*='login' i], [class*='sign-in' i], [class*='signin' i]",
+                    "selector": "button, a",
+                    "contains": "^\\s*log ?in\\s*$",
                     "text": "Sign in with your Bambu Lab account",
                 },
                 {
