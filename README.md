@@ -156,6 +156,14 @@ known of them:
 - **The token** is sent as `Authorization: Bearer`, as Bambu Lab's cloud API
   takes it.
 
+`pc login` was run against the live site in a real (headed) Chrome with
+PartCAD's extension. MakerWorld sometimes puts Cloudflare's "Verify you are
+human" in front of its pages; the extension's bar then asks the person to
+confirm it, and nothing else - nothing clicks it, and the plugin is handed
+only the `token` cookie signing in leaves. When the page itself loads, its "Log
+In" is a button only its text tells apart, which is what the guide picks it out
+by. Signing in itself was not done, for want of an account.
+
 ## Layout
 
 | Path | Purpose |
