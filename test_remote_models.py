@@ -191,6 +191,74 @@ def test_a_stand_in_is_chosen_only_when_there_is_nothing_else():
     assert Site({"1": model}, usable=lambda f: f.fallback).get("objects/part/1")["type"] == "gltf"
 
 
+def _with_preview(**kw):
+    model = _model(names=("clip.stl", "clip.step"), **kw)
+    model.files.append(rm.File("preview-9", "preview-9.glb", fallback=True))
+    return model
+
+
+def _preferring(models, usable=lambda f: True, **parameters):
+    site = Site(models, usable=usable)
+    site.request = {"parameters": parameters}
+    site.PREVIEWS = True
+    return site
+
+
+def test_a_part_names_its_source_and_a_preview_is_asked_for_by_it():
+    config = _preferring({"1": _with_preview()}).get("objects/part/1;source=preview")
+    assert config["type"] == "gltf" and config["parameters"]["source"]["default"] == "preview"
+    original = _preferring({"1": _with_preview()}).get("objects/part/1")
+    assert original["type"] == "step" and original["parameters"]["source"]["default"] == "original"
+    assert original["parameters"]["source"]["enum"] == ["auto", "original", "preview"]
+
+
+def test_source_original_never_falls_back_to_a_preview():
+    site = _preferring({"1": _with_preview()}, usable=lambda f: f.fallback, source="original")
+    # The original is chosen even though it cannot be had: the download says why.
+    assert site.get("objects/part/1")["type"] == "step"
+
+
+def test_the_plugins_source_is_every_parts_default_and_a_part_overrides_it():
+    site = _preferring({"1": _with_preview()}, source="preview")
+    assert site.get("objects/part/1")["type"] == "gltf"
+    assert site.get("objects/part/1;source=original")["type"] == "step"
+
+
+def test_formats_restrict_and_order_what_is_taken():
+    site = _preferring({"1": _with_preview()}, formats="stl, 3mf")
+    assert site.get("objects/part/1")["type"] == "stl"
+    # A part's own format is honoured whatever the plugin prefers.
+    assert site.get("objects/part/1;format=step")["type"] == "step"
+    assert _preferring({"1": _with_preview()}, formats="glb").get("objects/part/1")["type"] == "gltf"
+
+
+def test_what_the_preferences_rule_out_is_said_so(capsys):
+    site = _preferring({"1": _model(names=("clip.step",))}, formats="stl")
+    assert rm.serve(site, "objects/part/1") is None
+    assert "has no stl file (it has step)" in capsys.readouterr().err
+    no_previews = Site({"1": _model(names=("clip.step",))})
+    assert rm.serve(no_previews, "objects/part/1;source=preview") is None
+    assert "Test has no previews" in capsys.readouterr().err
+
+
+def test_a_preference_that_means_nothing_is_refused(capsys):
+    for parameters, said in (({"formats": "dwg"}, "unknown format 'dwg'"), ({"source": "best"}, "'source' is one of")):
+        assert rm.serve(_preferring({"1": _model()}, **parameters), "objects/part/1") is None
+        assert said in capsys.readouterr().err
+
+
+def test_a_named_file_must_be_of_the_source_named():
+    with pytest.raises(rm.SiteError, match="is a preview, not an original"):
+        _preferring({"1": _with_preview()}).resolve("1", {"file": "preview-9", "source": "original"})
+
+
+def test_a_search_names_only_what_the_preferences_take():
+    site = _preferring({"1": _with_preview()}, source="preview")
+    site.found = [rm.Model("1", title="Cable clip")]
+    hits = site.get("search/part?q=clip")
+    assert [config["type"] for config in hits.values()] == ["gltf"]
+
+
 # --- search ------------------------------------------------------------------
 
 
@@ -431,6 +499,32 @@ def test_fresh_credentials_that_cannot_be_checked_are_saved_and_said_so(no_token
 def test_saved_credentials_that_cannot_be_checked_are_not_taken_for_rejected_ones(no_token):
     with pytest.raises(RuntimeError, match="turned away"):
         rm.login(LoginSite(token="maybe", unreachable=True), Callback())
+
+
+class AgentCallback(Callback):
+    """'partcad_login' of 'pc login --agent': nobody at the screen."""
+
+    non_interactive = True
+
+
+def test_with_nobody_at_the_screen_the_browser_request_carries_instructions(no_token):
+    class Site_(LoginSite):
+        LOGIN_INSTRUCTIONS = "Or make an API key at https://example.com/keys."
+
+    site, callback = Site_(), AgentCallback()
+    with pytest.raises(BrowserNeeded):
+        rm.login(site, callback)
+    assert site.non_interactive is True
+    text = callback.calls[0]["instructions"]
+    assert text.startswith("Or make an API key at https://example.com/keys.")
+    assert "TEST_TOKEN" in text and "'token'" in text
+
+
+def test_an_older_partcad_is_not_handed_instructions(no_token):
+    callback = Callback()
+    with pytest.raises(BrowserNeeded):
+        rm.login(LoginSite(), callback)
+    assert "instructions" not in callback.calls[0]
 
 
 def test_a_partcad_without_login_is_told_to_upgrade():

@@ -121,6 +121,21 @@ def test_without_a_sign_in_a_model_is_its_preview_mesh(site):
     assert config["license"] == "CC BY-NC-SA 4.0"
 
 
+def test_with_a_sign_in_a_preview_is_still_had_by_asking_for_it(site):
+    assert site(token="t").get("objects/part/1400000")["type"] == "step"
+    config = site(token="t").get("objects/part/1400000;source=preview")
+    assert config["type"] == "gltf" and config["parameters"]["source"]["default"] == "preview"
+
+
+def test_the_plugins_source_and_formats_are_every_parts_default(site):
+    made = site(token="t")
+    made.request["parameters"].update({"source": "preview"})
+    assert made.get("objects/part/1400000")["type"] == "gltf"
+    meshes = site(token="t")
+    meshes.request["parameters"].update({"formats": "stl,3mf"})
+    assert meshes.get("objects/part/1400000")["type"] == "stl"
+
+
 def test_a_preview_is_the_first_plate_of_its_archive(site):
     made = site()
     config = made.get("objects/part/1400000;file=preview-1451666")
@@ -147,7 +162,7 @@ def test_without_a_sign_in_an_uploaded_file_says_what_it_needs(site, capsys):
     config = made.get("objects/part/1400000;format=step")
     assert rm.serve(made, "files/" + config["path"]) is None
     err = capsys.readouterr().err
-    assert "takes a signed-in MakerWorld account" in err and "format=glb" in err
+    assert "takes a signed-in MakerWorld account" in err and "source=preview" in err
 
 
 def test_a_search_names_what_can_be_had(site):

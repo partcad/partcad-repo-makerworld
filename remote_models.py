@@ -20,6 +20,16 @@ the name says which:
     763622;format=stl             its best STL
     763622;file=1234567           that file, by its id on the site
     763622;file=clip.stl          or by its name
+    763622;source=preview         the site's own preview mesh of it, where
+                                  the site has one: coarser, and needs no login
+
+Which file is "best" is the plugin's to say - an exact format before a mesh, a
+file that can be had with the credentials there are before one that cannot,
+the designer's own before the site's preview - and the user's to change, for
+every model at once, with the plugin's parameters 'formats' (which formats to
+take, best first) and 'source' ('auto', 'original' or 'preview'). Those are
+set in ~/.partcad/config.yaml, or with an 'enrich' of the plugin; a part's own
+parameters, in its name or an enrich's 'with', override them for that part.
 
 Every one of those is resolved by the plugin, not by PartCAD applying the
 parameters to the base declaration (the package says so with
@@ -37,7 +47,10 @@ otherwise asks PartCAD to open the user's browser on the site's sign-in, with
 PartCAD's extension in it to pick up what signing in leaves behind - a cookie,
 a token in storage, an API key on a page - and checks that instead. PartCAD
 saves what it returns as the user's own parameters of the plugin, which is
-where every later request reads them from (see 'Site.login').
+where every later request reads them from (see 'Site.login'). With nobody at
+the screen ('pc login --agent', or 'pc mcp'), PartCAD prints what a person
+would do in that browser instead, with what the site says of any other way in
+(see 'Site.LOGIN_INSTRUCTIONS').
 """
 
 import base64
@@ -79,7 +92,12 @@ _PART_TYPE = {name: part_type for name, part_type, _ in FORMATS}
 _RANK = {name: index for index, (name, _, _) in enumerate(FORMATS)}
 
 # The parameters every model part takes. A site may add its own.
-PARAMETERS = ("file", "format")
+PARAMETERS = ("file", "format", "source")
+
+# Which of a model's files: 'original' is what the designer uploaded; 'preview'
+# is the site's own mesh of it - coarser, and needing no login - where the site
+# has one; 'auto' is the best original that can be had, else a preview.
+SOURCES = ("auto", "original", "preview")
 
 # How many hits a search answers with when it is not told.
 DEFAULT_LIMIT = 20
@@ -463,8 +481,9 @@ class File:
 
     'id' is what the site knows it by and 'name' what it is called; either
     names it in a part name. A 'fallback' is a file that stands in for the
-    model's own when those cannot be had - a site's preview mesh - and is
-    chosen only then. 'extra' is the site's own business.
+    model's own when those cannot be had - a site's preview mesh, 'source:
+    preview' - and is chosen only then, unless asked for. 'extra' is the
+    site's own business.
     """
 
     def __init__(self, id, name, size=None, fallback=False, **extra):
@@ -518,9 +537,17 @@ class Site:
     VERSION = 1  # the plugin's CACHE_VERSION, which its User-Agent carries
     # Parameters a part of this site takes beyond PARAMETERS, {name: description}.
     EXTRA_PARAMETERS = {}
+    # Whether the site has preview meshes of its own ('source: preview').
+    PREVIEWS = False
+    # For whoever logs in with nobody at the screen ('pc login --agent'): any
+    # other way in than signing in with a browser - an API key and the page
+    # that makes one - and what can be had without logging in at all.
+    LOGIN_INSTRUCTIONS = None
 
     def __init__(self, request=None):
         self.request = request or {}
+        self.non_interactive = False
+        self._preferences = None
         self.http = Http(
             self.NAME,
             "Mozilla/5.0 (compatible; PartCAD-%s/%s; +https://github.com/partcad/partcad-repo-%s)"
@@ -586,6 +613,14 @@ class Site:
                 "enum": list(FORMAT_NAMES),
                 "desc": "The format to take the model in, when 'file' does not say: its best file of that format.",
             },
+            "source": {
+                "type": "string",
+                "default": "preview" if file.fallback else "original",
+                "enum": list(SOURCES),
+                "desc": "Which of the model's files, when 'file' does not say: 'original' (what the designer "
+                "uploaded), 'preview' (%s's own mesh of it, coarser and needing no login, where it has one) or "
+                "'auto' (the best original that can be had, else a preview)." % self.TITLE,
+            },
         }
         for name, desc in self.EXTRA_PARAMETERS.items():
             declared[name] = {"type": "string", "default": "", "desc": desc}
@@ -614,8 +649,47 @@ class Site:
             config["url"] = model.url
         return config
 
-    def choose(self, model, wanted_file=None, wanted_format=None):
-        """The file a name means: the one it names, else the best of the format it names, else the best."""
+    def preferences(self):
+        """(formats, source): the plugin's 'formats' and 'source' parameters, as the user set them.
+
+        'formats' is which formats to take a model in, best first ('stl,3mf'
+        for meshes only); empty is all of them, best first. 'source' is which
+        of a model's files: see SOURCES. Both are a default for every model,
+        which a part's own 'format', 'file' and 'source' override.
+        """
+        if self._preferences is None:
+            parameters = (self.request or {}).get("parameters") or {}
+            formats = []
+            for value in re.split(r"[\s,;]+", str(parameters.get("formats") or "").strip()):
+                if not value:
+                    continue
+                fmt = normalize_format(value)
+                if fmt is None:
+                    raise SiteError(
+                        "%s: unknown format '%s' in 'formats'; PartCAD reads %s"
+                        % (self.NAME, value, ", ".join(FORMAT_NAMES))
+                    )
+                if fmt not in formats:
+                    formats.append(fmt)
+            source = str(parameters.get("source") or "auto").strip().lower()
+            if source not in SOURCES:
+                raise SiteError("%s: 'source' is one of %s, not '%s'" % (self.NAME, ", ".join(SOURCES), source))
+            self._preferences = (tuple(formats) or FORMAT_NAMES, source)
+        return self._preferences
+
+    @staticmethod
+    def _of_source(file, source):
+        return source == "auto" or file.fallback == (source == "preview")
+
+    def _rank(self, fmt):
+        formats = self.preferences()[0]
+        return formats.index(fmt) if fmt in formats else len(formats) + _RANK[fmt]
+
+    def choose(self, model, wanted_file=None, wanted_format=None, wanted_source=None):
+        """The file a name means: the one it names, else the best of the format and source it names, else the best.
+
+        What the name leaves open, the plugin's 'formats' and 'source' decide.
+        """
         files = model.files or []
         if wanted_file:
             for match in (
@@ -636,32 +710,54 @@ class Site:
                             "%s: '%s' of %s is %s, not %s"
                             % (self.NAME, file.name, model.id, file.format, wanted_format)
                         )
+                    if wanted_source and not self._of_source(file, wanted_source):
+                        raise SiteError(
+                            "%s: '%s' of %s is %s, not %s"
+                            % (
+                                self.NAME,
+                                file.name,
+                                model.id,
+                                "a preview" if file.fallback else "an original",
+                                "a preview" if wanted_source == "preview" else "an original",
+                            )
+                        )
                     return file
             raise NotFound(
                 "%s: %s has no file '%s'. It has: %s"
                 % (self.NAME, model.id, wanted_file, ", ".join(f.name for f in files) or "no files")
             )
-        candidates = [f for f in files if f.format and (not wanted_format or f.format == wanted_format)]
+        formats, source = self.preferences()
+        source = wanted_source or source
+        formats = (wanted_format,) if wanted_format else formats
+        candidates = [f for f in files if f.format in formats and self._of_source(f, source)]
         if not candidates:
-            readable = sorted({f.format for f in files if f.format}, key=_RANK.get)
-            if wanted_format:
+            readable = [f for f in files if f.format]
+            if not readable:
                 raise NotFound(
-                    "%s: %s has no %s file%s"
-                    % (
-                        self.NAME,
-                        model.id,
-                        wanted_format,
-                        (" (it has %s)" % ", ".join(readable)) if readable else "",
+                    "%s: %s has no file PartCAD reads (it reads %s; the model has %s)"
+                    % (self.NAME, model.id, ", ".join(FORMAT_NAMES), ", ".join(f.name for f in files) or "no files")
+                )
+            wanted = []
+            if source == "preview":
+                wanted.append("preview")
+            elif source == "original":
+                wanted.append("original")
+            if wanted_format or formats != FORMAT_NAMES:
+                wanted.append("/".join(formats))
+            if source == "preview" and not self.PREVIEWS:
+                why = "%s has no previews" % self.TITLE
+            else:
+                why = "it has %s" % ", ".join(
+                    sorted(
+                        {"%s%s" % (f.format, " (preview)" if f.fallback else "") for f in readable},
+                        key=lambda text: (text.endswith("(preview)"), _RANK[text.split()[0]]),
                     )
                 )
-            raise NotFound(
-                "%s: %s has no file PartCAD reads (it reads %s; the model has %s)"
-                % (self.NAME, model.id, ", ".join(FORMAT_NAMES), ", ".join(f.name for f in files) or "no files")
-            )
+            raise NotFound("%s: %s has no %s file (%s)" % (self.NAME, model.id, " ".join(wanted), why))
         return min(candidates, key=lambda f: self._preference(f, files))
 
     def _preference(self, file, files):
-        return (not self.usable(file), file.fallback, _RANK[file.format], files.index(file))
+        return (not self.usable(file), file.fallback, self._rank(file.format), files.index(file))
 
     def listed(self, model):
         """The files of a model a search names: the best class there is, one per stem.
@@ -672,7 +768,8 @@ class Site:
         named when there are any, and a stand-in only when there is nothing
         else.
         """
-        files = [f for f in (model.files or []) if f.format]
+        formats, source = self.preferences()
+        files = [f for f in (model.files or []) if f.format in formats and self._of_source(f, source)]
         if not files:
             return []
         best = min((not self.usable(f), f.fallback) for f in files)
@@ -707,8 +804,15 @@ class Site:
                     "%s: unknown format '%s'; PartCAD reads %s"
                     % (self.NAME, parameters["format"], ", ".join(FORMAT_NAMES))
                 )
+        wanted_source = None
+        if parameters.get("source"):
+            wanted_source = str(parameters["source"]).strip().lower()
+            if wanted_source not in SOURCES:
+                raise SiteError(
+                    "%s: 'source' is one of %s, not '%s'" % (self.NAME, ", ".join(SOURCES), parameters["source"])
+                )
         model = self.model(base)
-        file = self.choose(model, parameters.get("file") or None, wanted_format)
+        file = self.choose(model, parameters.get("file") or None, wanted_format, wanted_source)
         return self.part_config(model, file)
 
     def file(self, path):
@@ -804,6 +908,22 @@ class Site:
         """The credentials in what the browser captured, {parameter: value}."""
         return {name: str(captured.get(name) or "").strip() for name in self.CREDENTIALS}
 
+    def login_instructions(self):
+        """What 'pc login --agent' says beside the browser's request: LOGIN_INSTRUCTIONS, and the environment."""
+        lines = [self.LOGIN_INSTRUCTIONS.strip()] if self.LOGIN_INSTRUCTIONS else []
+        if self.CREDENTIALS:
+            lines.append(
+                "The plugin also reads %s from the environment it runs in (which a container sandbox does not "
+                "see), and the plugin's parameter%s %s from ~/.partcad/config.yaml, where 'pc login' keeps %s."
+                % (
+                    " and ".join(self.CREDENTIALS.values()),
+                    "s" if len(self.CREDENTIALS) > 1 else "",
+                    " and ".join("'%s'" % name for name in self.CREDENTIALS),
+                    "them" if len(self.CREDENTIALS) > 1 else "it",
+                )
+            )
+        return "\n\n".join(lines)
+
     def login(self, partcad_login):
         """'login' answered: the credentials there are if the site takes them, else new ones from the browser.
 
@@ -814,12 +934,21 @@ class Site:
         be anything that must not happen twice - and checking credentials is
         not.
         """
+        # Nobody at the screen ('pc login --agent'): the browser is not opened,
+        # and what is asked of it is told to whoever is there instead. A site
+        # whose sign-in is no good to do by hand may ask for something else.
+        self.non_interactive = bool(getattr(partcad_login, "non_interactive", False))
         current = self.credentials()
         if any(current.values()):
             who = self.whoami(current)
             if who:
                 return {"parameters": current, "message": "Already logged in to %s as %s" % (self.TITLE, who)}
-        captured = partcad_login.open_browser(**self.login_spec())
+        spec = dict(self.login_spec())
+        if hasattr(partcad_login, "non_interactive"):  # a PartCAD that takes 'instructions'
+            instructions = self.login_instructions()
+            if instructions and "instructions" not in spec:
+                spec["instructions"] = instructions
+        captured = partcad_login.open_browser(**spec)
         fresh = self.credentials_from(captured)
         if not any(fresh.values()):
             raise LoginFailed("%s: the browser came back with nothing to log in with" % self.NAME)

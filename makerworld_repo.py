@@ -12,6 +12,7 @@ and is one file of that model.
     1400000                          the model's best file (see remote_models.FORMATS)
     1400000;format=step              its best STEP
     1400000;file=bracket.stl         one of its files, by name
+    1400000;source=preview           the preview mesh of its first print profile
     1400000;file=preview-1451665     the preview mesh of one of its print profiles
 
 A model's details are MakerWorld's to give anyone, and so is the mesh its
@@ -19,7 +20,7 @@ viewer shows of each print profile - a '.glb' of the plate, served as a part in
 its own right. The files the designer uploaded take a signed-in MakerWorld
 account: give the plugin its token as MAKERWORLD_TOKEN, or as the repository's
 'token' parameter (see the README). Without one, a model's best file is its
-preview mesh.
+preview mesh - which the plugin's 'source' parameter can make it with one too.
 
 PartCAD runs this script once per key (via runpy) with the key in
 ``request["key"]``; the answer goes in ``output``. What the keys mean, and
@@ -40,7 +41,9 @@ import zipfile
 # to what is answered - here or in remote_models.py.
 #
 # v1: models as parts, one per uploaded file and one per print profile's preview; and 'login'.
-CACHE_VERSION = 1
+# v2: a part's 'source' parameter, and the plugin's 'formats' and 'source' preferences;
+#     'login' says what to do with nobody at the screen.
+CACHE_VERSION = 2
 
 
 def _shared():
@@ -129,6 +132,13 @@ class MakerWorld(rm.Site):
     URL = WEB
     DESC = "Models on MakerWorld, a part per file, by the model's number. Nothing is listed; search instead."
     VERSION = CACHE_VERSION
+    PREVIEWS = True
+    LOGIN_INSTRUCTIONS = (
+        "Without logging in, every print profile's preview mesh can be had: ask for a part with 'source=preview', or "
+        "leave 'source' at 'auto', which takes a preview when there is no token. The designer's own files take the "
+        "'token' cookie of makerworld.com, from a browser signed in to MakerWorld with a Bambu Lab account: the "
+        "browser's developer tools show it, under Application (or Storage) > Cookies."
+    )
 
     def __init__(self, request=None):
         super().__init__(request)
@@ -237,8 +247,8 @@ class MakerWorld(rm.Site):
         if not self.token:
             raise rm.NeedsCredentials(
                 "makerworld: %s takes a signed-in MakerWorld account: set MAKERWORLD_TOKEN, or the "
-                "'token' parameter of the repository (see the README), or ask for "
-                "'%s;format=glb', the preview mesh, which needs none" % (what, model.id)
+                "'token' parameter of the repository (see the README; 'pc login' sets it), or ask for "
+                "'%s;source=preview', a print profile's preview mesh, which needs none" % (what, model.id)
             )
         auth = {"Authorization": "Bearer " + self.token}
         if file.extra.get("url"):

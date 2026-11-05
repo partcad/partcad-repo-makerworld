@@ -34,10 +34,12 @@ A model is named by the model's number, as in `makerworld.com/en/models/1000000`
 | `1000000` | the model's best file |
 | `1000000;format=stl` | its best STL |
 | `1000000;file=<name>` | one file the designer uploaded, by its name (`extras/base.3mf` in a folder) |
+| `1000000;source=preview` | the preview mesh of its first print profile, which needs no login |
 | `1000000;file=preview-<profile>` | the preview mesh of one print profile, by the profile's number |
 
-Both parameters may be given, and must then agree. "Best" is by format, in
-this order, and among files of one format the first the site lists:
+Any of them may be given together, and must then agree; `source` and the
+plugin's own `formats` are under [Parameters](#parameters). "Best" is by
+format, in this order unless `formats` says otherwise, and among files of one format the first the site lists:
 
 | Format | Read as PartCAD part type | Extensions |
 | --- | --- | --- |
@@ -117,10 +119,11 @@ nothing else.
 
 **What a model's best file is depends on whether there is a token.** Without
 one, it is the default print profile's preview (a preview is only ever chosen
-when nothing else can be had); with one, it is the best file the designer
-uploaded. PartCAD keeps what a name resolved to, so after adding a token, ask by
-`file=` or `format=`, or refresh the package (`pc update`), to have the
-uploaded files.
+when nothing else can be had, unless asked for: `source=preview`); with one, it
+is the best file the designer uploaded. A token `pc login` saved, or one set in
+`~/.partcad/config.yaml`, is part of what PartCAD keys its cache of this package
+on, so a name resolves afresh once it is there; after setting `MAKERWORLD_TOKEN`
+instead, `pc update` refreshes it.
 
 ### The preview mesh
 
@@ -137,6 +140,78 @@ object on it, where the profile put it.
 does not carry PartCAD's environment into its container, so an environment
 variable does not reach the plugin there. The repository parameter does, being
 part of what PartCAD hands the plugin; use that, or `pythonSandbox: venv`.
+
+## Parameters
+
+The plugin's parameters, declared in `partcad.yaml`, are a default for every
+MakerWorld part:
+
+| Parameter | Default | What it is |
+| --- | --- | --- |
+| `formats` | all, in the order above | The formats to take a model in, best first, separated by commas. A format left out is not taken - `stl,3mf` is meshes only - unless a part asks for it by its own `format` or `file`. |
+| `source` | `auto` | Which of a model's files: `original` is what the designer uploaded, which takes a signed-in account; `preview` is the mesh MakerWorld's viewer shows of a print profile, coarser and needing no account; `auto` is the best original when there is a token, else a preview. |
+| `token` | empty | The `token` cookie of makerworld.com, signed in with a Bambu Lab account. Only the designer's own files need it. `MAKERWORLD_TOKEN` gives it too. |
+
+They are yours to set without touching this package - every one of them, the
+credentials included, and the OAuth or API-key settings beside them:
+
+- in your own `~/.partcad/config.yaml`, by the plugin's name, which is where
+  `pc login` keeps the credentials:
+
+  ```yaml
+  parameters:
+    "//pub/universe/makerworld:makerworld_repo":
+      formats: stl,3mf
+  ```
+
+- or, for anything but the credentials, in a package of your own, as an enrich
+  of the plugin and a package it serves - `//makerworld_meshes:<model>` in a
+  package at the root:
+
+  ```yaml
+  repositories:
+    meshes_repo:
+      type: enrich
+      source: //pub/universe/makerworld:makerworld_repo
+      with:
+        formats: stl,3mf
+  dependencies:
+    makerworld_meshes:
+      type: external
+      plugin: :meshes_repo
+  ```
+
+A part's own `file`, `format` and `source` override them for that part - in its
+name (`1400000;format=stl`), or in the `with` of an enrich of the part:
+
+```yaml
+parts:
+  clip:
+    type: enrich
+    source: //pub/universe/makerworld/models:1400000
+    with:
+      format: stl
+```
+
+PartCAD keys what it caches of this package on your overrides of the plugin's
+parameters, so a change to one - logging in, too - takes effect at once. An
+environment variable is not seen there: after setting one, `pc update`
+refreshes what was cached without it.
+
+## Logging in with nobody at the screen
+
+An AI agent, or a script, logs in without a browser:
+
+```shell
+pc login --agent //pub/universe/makerworld:makerworld_repo
+pc login --agent --set token=... //pub/universe/makerworld:makerworld_repo
+```
+
+The first prints what a person would do in the browser instead of opening one -
+where to sign in, what to copy, and the command that hands it over - and exits
+with status 3. It says that every print profile's preview can be had without a token (`source=preview`), and where in a signed-in browser the token is. The second hands over what the person found; the
+plugin checks it with MakerWorld before PartCAD keeps it. `pc mcp`'s `login`
+tool works the same way.
 
 ## Status
 

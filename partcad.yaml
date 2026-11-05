@@ -36,7 +36,8 @@ docs:
     ```shell
     pc search parts -P //pub/universe/makerworld/models -k "cable clip"
     pc inspect //pub/universe/makerworld/models:1400000
-    pc inspect "//pub/universe/makerworld/models:1400000;format=glb"
+    pc inspect "//pub/universe/makerworld/models:1400000;source=preview"
+    pc inspect "//pub/universe/makerworld/models:1400000;format=stl"
     ```
 
 dependencies:
@@ -50,15 +51,75 @@ repositories:
     type: basic
     path: makerworld_repo.py
     desc: Serves MakerWorld models as parts, and searches MakerWorld.
+    # Every parameter here is a default for every MakerWorld part, and yours
+    # to change without touching this package, two ways:
+    #
+    # - in your own ~/.partcad/config.yaml, under 'parameters', by the
+    #   plugin's name - which is also where 'pc login' keeps the token:
+    #
+    #     parameters:
+    #       //pub/universe/makerworld:makerworld_repo:
+    #         formats: stl,3mf
+    #
+    # - or in a package of your own, as an enrich of the plugin and a package
+    #   it serves, whose parts are then yours to name - '//makerworld_meshes:<model>'
+    #   in a package at the root (never with credentials: those are yours,
+    #   not a package's):
+    #
+    #     repositories:
+    #       meshes_repo:
+    #         type: enrich
+    #         source: //pub/universe/makerworld:makerworld_repo
+    #         with:
+    #           formats: stl,3mf
+    #     dependencies:
+    #       makerworld_meshes:
+    #         type: external
+    #         plugin: :meshes_repo
+    #
+    # A part's own parameters override these for that part. Every part takes
+    # 'file' (one of the model's files, by name or by id - 'preview-<profile>'
+    # for a print profile's preview), 'format' (its best file of that format:
+    # step, brep, 3mf, stl, obj, glb or scad) and 'source' (as below) - in its
+    # name, '1400000;format=stl', or in the 'with' of an enrich of the part:
+    #
+    #     parts:
+    #       clip:
+    #         type: enrich
+    #         source: //pub/universe/makerworld/models:1400000
+    #         with:
+    #           format: stl
     parameters:
-      # Empty here, and meant to stay so. A credential is the user's own, and
-      # is set where only they see it; the plugin reads the environment first.
+      formats:
+        type: string
+        default: ""
+        desc: >-
+          The formats to take a model in, best first, separated by commas:
+          step, brep, 3mf, stl, obj, glb, scad. A format left out is not taken
+          - 'stl,3mf' is meshes only - unless a part asks for it by its own
+          'format' or 'file'. Empty is all of them, in that order.
+      source:
+        type: string
+        default: auto
+        enum: [auto, original, preview]
+        desc: >-
+          Which of a model's files: 'original', what the designer uploaded,
+          which takes a signed-in MakerWorld account; 'preview', the mesh
+          MakerWorld's viewer shows of a print profile, coarser and needing no
+          account at all; or 'auto', the best original when there is a token,
+          else a preview.
+      # Empty here, and meant to stay so: a credential is the user's own, and
+      # is set where only they see it.
       token:
         type: string
         default: ""
         desc: >-
-          The access token of a signed-in MakerWorld (Bambu Lab) account. The
-          files a designer uploaded need one; a print profile's preview mesh
-          does not. Prefer the MAKERWORLD_TOKEN environment variable, or set this
-          in your own ~/.partcad/config.yaml (see the README) - never in a
-          package. 'pc login //pub/universe/makerworld:makerworld_repo' sets it.
+          The access token of a signed-in MakerWorld (Bambu Lab) account: the
+          'token' cookie of makerworld.com. Only the designer's own files need
+          it; a preview needs nothing. 'pc login
+          //pub/universe/makerworld:makerworld_repo' gets it in a browser and
+          keeps it in your ~/.partcad/config.yaml, under 'parameters' as above;
+          'pc login --agent' says how to get it by hand, and takes it back with
+          '--set token=...'. The MAKERWORLD_TOKEN environment variable gives it
+          too, where the plugin's sandbox sees the environment (a container
+          does not). Never set it in a package.
