@@ -1,0 +1,17 @@
+partcad-repo-makerworld
+=======================
+
+This PartCAD package serves MakerWorld's models as PartCAD parts.
+
+The code in this repository (the `makerworld_repo.py` repository plugin, the shared
+`remote_models.py`, the PartCAD configuration and the tests) is:
+
+    Copyright 2026 PartCAD
+    Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+No model is included in this repository. Models, their metadata and their files
+are fetched on demand from https://makerworld.com, and remain
+under their own terms and licences, as each model states them.
+
+MakerWorld is a trademark of its owner. This package is not affiliated with or
+endorsed by MakerWorld.

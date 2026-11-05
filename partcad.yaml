@@ -1,0 +1,64 @@
+# PartCAD package: MakerWorld models as parts, served by a repository plugin.
+#
+# Published as //pub/universe/makerworld/models: this package is
+# //pub/universe/makerworld, and its one external dependency 'models' is served by
+# the makerworld_repo plugin. Nothing is listed - a model site's catalog is not
+# something to enumerate - so a part is asked for by name, and found with
+# 'pc search parts' (see the README).
+name: //pub/universe/makerworld
+
+desc: |
+  Models on MakerWorld (https://makerworld.com) as PartCAD parts, a part per
+  file of a model, by the model's number. Nothing is listed: a part is asked for
+  by name, and found with 'pc search parts'. No geometry is vendored; every file
+  is fetched from MakerWorld when it is first built.
+url: https://makerworld.com/
+
+# The first PartCAD whose repository plugins may search their own catalog
+# ('searchKinds') and resolve a parametrized name themselves ('instanceKinds'),
+# which is what lets a parameter choose another file of a model, and that has
+# 'pc login'.
+partcad: ">=0.9.3"
+
+# An upload to a model site says nothing about whether, or how, it is made to
+# be manufactured. The plugin says the same of 'models' in its metadata.
+manufacturable: false
+
+# What the plugin needs in the sandbox it runs in, beyond what PartCAD puts
+# there: MakerWorld's preview meshes are Draco-compressed, which PartCAD's glTF
+# reader does not decode, so the plugin writes them out plainly first.
+pythonRequirements:
+  - DracoPy>=2,<3
+
+docs:
+  name: MakerWorld for PartCAD
+  usage: |
+    ```shell
+    pc search parts -P //pub/universe/makerworld/models -k "cable clip"
+    pc inspect //pub/universe/makerworld/models:1400000
+    pc inspect "//pub/universe/makerworld/models:1400000;format=glb"
+    ```
+
+dependencies:
+  models:
+    type: external
+    plugin: :makerworld_repo
+    desc: MakerWorld models, a part per file.
+
+repositories:
+  makerworld_repo:
+    type: basic
+    path: makerworld_repo.py
+    desc: Serves MakerWorld models as parts, and searches MakerWorld.
+    parameters:
+      # Empty here, and meant to stay so. A credential is the user's own, and
+      # is set where only they see it; the plugin reads the environment first.
+      token:
+        type: string
+        default: ""
+        desc: >-
+          The access token of a signed-in MakerWorld (Bambu Lab) account. The
+          files a designer uploaded need one; a print profile's preview mesh
+          does not. Prefer the MAKERWORLD_TOKEN environment variable, or set this
+          in your own ~/.partcad/config.yaml (see the README) - never in a
+          package. 'pc login //pub/universe/makerworld:makerworld_repo' sets it.
