@@ -18,7 +18,7 @@ url: https://makerworld.com/
 # ('searchKinds') and resolve a parametrized name themselves ('instanceKinds'),
 # which is what lets a parameter choose another file of a model, and that has
 # 'pc login'.
-partcad: ">=0.9.3"
+partcad: ">=0.9.4"
 
 # An upload to a model site says nothing about whether, or how, it is made to
 # be manufactured. The plugin says the same of 'models' in its metadata.

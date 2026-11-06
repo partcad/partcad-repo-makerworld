@@ -19,7 +19,7 @@ time a part is built, and kept by PartCAD from then on.
 and so does the plugin of what it serves: an upload to a model site says
 nothing about whether, or how, it is made to be made.
 
-Requires PartCAD 0.9.3 or newer: the first release whose repository plugins
+Requires PartCAD 0.9.4 or newer: the first release whose repository plugins
 may search their own catalog (`searchKinds`), resolve a parametrized name
 themselves (`instanceKinds`), and log in (`pc login`). They are described under
 "Repositories" and "Logging in" in PartCAD's plugin documentation.
