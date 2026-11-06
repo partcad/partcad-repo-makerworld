@@ -1,15 +1,15 @@
 # MakerWorld for PartCAD
 
 Serves MakerWorld's models as PartCAD parts, published as
-`//pub/universe/makerworld/models`.
+`//pub/collection/makerworld/models`.
 
 **Nothing is listed.** A model site's catalog is not something to enumerate,
 so `pc list parts` of this package is empty, as is `pc list packages`. A part is
 asked for by name, and found with `pc search parts`:
 
 ```shell
-pc search parts -P //pub/universe/makerworld/models -k "cable clip"
-pc inspect "//pub/universe/makerworld/models:1000000"
+pc search parts -P //pub/collection/makerworld/models -k "cable clip"
+pc inspect "//pub/collection/makerworld/models:1000000"
 ```
 
 **No geometry is vendored.** Every file is fetched from MakerWorld the first
@@ -81,7 +81,7 @@ ten minutes.
 ## Logging in
 
 ```shell
-pc login //pub/universe/makerworld:makerworld_repo
+pc login //pub/collection/makerworld:makerworld_repo
 ```
 
 checks the token the plugin has by asking Bambu Lab's cloud API whom it belongs
@@ -110,7 +110,7 @@ export MAKERWORLD_TOKEN=...       # read by the plugin; see the note on Docker b
 ```yaml
 # ~/.partcad/config.yaml
 parameters:
-  "//pub/universe/makerworld:makerworld_repo":
+  "//pub/collection/makerworld:makerworld_repo":
     token: "..."
 ```
 
@@ -160,7 +160,7 @@ credentials included, and the OAuth or API-key settings beside them:
 
   ```yaml
   parameters:
-    "//pub/universe/makerworld:makerworld_repo":
+    "//pub/collection/makerworld:makerworld_repo":
       formats: stl,3mf
   ```
 
@@ -172,7 +172,7 @@ credentials included, and the OAuth or API-key settings beside them:
   repositories:
     meshes_repo:
       type: enrich
-      source: //pub/universe/makerworld:makerworld_repo
+      source: //pub/collection/makerworld:makerworld_repo
       with:
         formats: stl,3mf
   dependencies:
@@ -188,7 +188,7 @@ name (`1400000;format=stl`), or in the `with` of an enrich of the part:
 parts:
   clip:
     type: enrich
-    source: //pub/universe/makerworld/models:1400000
+    source: //pub/collection/makerworld/models:1400000
     with:
       format: stl
 ```
@@ -203,8 +203,8 @@ refreshes what was cached without it.
 An AI agent, or a script, logs in without a browser:
 
 ```shell
-pc login --agent //pub/universe/makerworld:makerworld_repo
-pc login --agent --set token=... //pub/universe/makerworld:makerworld_repo
+pc login --agent //pub/collection/makerworld:makerworld_repo
+pc login --agent --set token=... //pub/collection/makerworld:makerworld_repo
 ```
 
 The first prints what a person would do in the browser instead of opening one -
@@ -243,7 +243,7 @@ by. Signing in itself was not done, for want of an account.
 
 | Path | Purpose |
 | --- | --- |
-| `partcad.yaml` | `//pub/universe/makerworld`; the `models` external dependency and the `makerworld_repo` repository that serves it. |
+| `partcad.yaml` | `//pub/collection/makerworld`; the `models` external dependency and the `makerworld_repo` repository that serves it. |
 | `makerworld_repo.py` | The repository plugin: how MakerWorld is asked. |
 | `remote_models.py` | What every model-site plugin shares, byte for byte: the names, the formats, HTTP and its cache, the keys PartCAD asks. The same file is in partcad-repo-thingiverse, partcad-repo-makerworld, partcad-repo-grabcad, partcad-repo-printables and partcad-repo-cults3d; `remote_models.sha256` is its digest, and a test fails when the two disagree - change it in all five. |
 | `test_*.py` | The tests. Nothing in them touches the network. |

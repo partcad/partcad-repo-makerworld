@@ -5,7 +5,7 @@
 #
 """A PartCAD 'basic' repository plugin that serves MakerWorld models as parts.
 
-Published as ``//pub/universe/makerworld/models``. Nothing is listed: a part is
+Published as ``//pub/collection/makerworld/models``. Nothing is listed: a part is
 asked for by the model's number (the one in makerworld.com/en/models/<number>),
 and is one file of that model.
 
