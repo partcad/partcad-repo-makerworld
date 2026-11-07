@@ -605,3 +605,16 @@ def test_a_model_that_is_found_and_not_served_is_listed_when_the_site_says_why()
             "url": "https://example.com/1",
         }
     }
+
+
+def test_threads_storing_one_key_at_once_each_store_it_whole(http):
+    """A search reads models on a pool of threads, and two of them can store one key."""
+    import concurrent.futures
+
+    contents = [bytes([i]) * 65536 for i in range(16)]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda content: http._remember("json", "https://x/shared", content), contents * 4))
+    path = http._path("json", "https://x/shared")
+    with open(path, "rb") as f:
+        assert f.read() in contents
+    assert [name for name in os.listdir(os.path.dirname(path)) if name.endswith(".tmp")] == []

@@ -61,6 +61,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 import traceback
 import urllib.error
@@ -352,10 +353,20 @@ class Http:
     def _remember(self, kind, key, content):
         path = self._path(kind, key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        temporary = path + ".%d.tmp" % os.getpid()
-        with open(temporary, "wb") as f:
-            f.write(content)
-        os.replace(temporary, path)
+        # A file of its own per write, not per process: 'find' reads models on
+        # a pool of threads, and two of them can store one key - a model a
+        # search lists twice, or a page two models share.
+        fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(content)
+            os.replace(temporary, path)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
 
     def json(self, url, what, headers=None, data=None, method=None, ttl=DAY, valid=None):
         """The JSON at 'url', from the cache when it is younger than 'ttl' seconds.
