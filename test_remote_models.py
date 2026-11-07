@@ -5,7 +5,7 @@
 #
 """Tests of remote_models.py, the part every model-site plugin shares.
 
-The same file is in each of the five repositories, beside the same module.
+The same file is in every model-site plugin repository, beside the same module.
 Nothing here touches the network: a site is a stand-in, and HTTP is answered
 from a table.
 """
@@ -362,6 +362,32 @@ def test_a_bot_check_is_reported_as_one(http, monkeypatch):
         http.json("https://x/a", "thing 1")
     assert "turned away by a Cloudflare bot check" in str(refused.value)
     assert "do not pretend to be a browser" in str(refused.value)
+
+
+@pytest.mark.parametrize("status", [202, 405])
+def test_an_aws_waf_challenge_is_a_bot_check_whatever_its_status(http, monkeypatch, status):
+    """AWS WAF challenges with a 202 and an empty body, which would otherwise pass for an empty answer."""
+    wire = Wire({"https://x/a": (status, {"x-amzn-waf-action": "challenge"}, b"")})
+    monkeypatch.setattr(http, "request", wire)
+    with pytest.raises(rm.Refused) as refused:
+        http.json("https://x/a", "thing 1")
+    assert "turned away by an AWS WAF bot check (challenge)" in str(refused.value)
+    with pytest.raises(rm.Refused):
+        http.probe("https://x/a", "thing 1")
+
+
+def test_what_preview_means_is_the_sites_to_say():
+    class Plain(rm.Site):
+        NAME, TITLE = "plain", "Plain"
+
+    class Own(rm.Site):
+        NAME, TITLE = "own", "Own"
+        PREVIEW_DESCRIPTION = "the GLB %s converts every model to, which needs a token"
+
+    file = rm.File("1", "a.stl")
+    file.format = "stl"
+    assert "Plain's own mesh of it, coarser and needing no login" in Plain().parameters(file)["source"]["desc"]
+    assert "the GLB Own converts every model to, which needs a token" in Own().parameters(file)["source"]["desc"]
 
 
 def test_a_sign_in_that_is_wanted_is_not_remembered_as_missing(http, monkeypatch):

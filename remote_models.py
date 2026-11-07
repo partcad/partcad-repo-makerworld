@@ -5,10 +5,10 @@
 #
 """What the PartCAD repository plugins for model sites have in common.
 
-This file is in partcad-repo-thingiverse, partcad-repo-makerworld,
-partcad-repo-grabcad, partcad-repo-printables and partcad-repo-cults3d, byte for
-byte; change it in all five, and raise each plugin's CACHE_VERSION when what it
-answers changes. Each plugin's own script (``<site>_repo.py``) says how its
+This file is in every model-site plugin (the partcad-repo-<site> repositories:
+thingiverse, makerworld, grabcad, printables, cults3d, sketchfab), byte for
+byte; change it in all of them, and raise each plugin's CACHE_VERSION when what
+it answers changes. Each plugin's own script (``<site>_repo.py``) says how its
 site is asked; this says what PartCAD is answered.
 
 A model site's catalog is not something to list, so none of these packages
@@ -20,8 +20,8 @@ the name says which:
     763622;format=stl             its best STL
     763622;file=1234567           that file, by its id on the site
     763622;file=clip.stl          or by its name
-    763622;source=preview         the site's own preview mesh of it, where
-                                  the site has one: coarser, and needs no login
+    763622;source=preview         the site's own mesh of it, where the site has
+                                  one (see 'Site.PREVIEW_DESCRIPTION')
 
 Which file is "best" is the plugin's to say - an exact format before a mesh, a
 file that can be had with the credentials there are before one that cannot,
@@ -234,7 +234,13 @@ def bot_check(response):
     These plugins identify themselves and do not pretend to be a browser, so a
     site that admits only browsers turns them away. That is reported as what it
     is, with nothing tried to get past it.
+
+    AWS WAF says so in a header, and on any status: its challenge is a 202 with
+    an empty body, which would otherwise pass for an answer with nothing in it.
     """
+    waf = (response.headers.get("x-amzn-waf-action") or "").lower()
+    if waf in ("challenge", "captcha"):
+        return "an AWS WAF bot check (%s)" % waf
     if response.status not in (401, 403, 429, 503):
         return None
     text = response.body[:8192].decode("latin-1", "replace")
@@ -304,9 +310,10 @@ class Http:
 
     def checked(self, response, what):
         """'response' if it is a 2xx; otherwise the SiteError that says why not."""
-        if 200 <= response.status < 300:
-            return response
+        # Before the status: a bot check can answer 2xx (see 'bot_check').
         refused_by = bot_check(response)
+        if 200 <= response.status < 300 and not refused_by:
+            return response
         if refused_by:
             raise Refused(
                 "%s: %s was turned away by %s. These plugins do not pretend to be a browser; "
@@ -539,6 +546,9 @@ class Site:
     EXTRA_PARAMETERS = {}
     # Whether the site has preview meshes of its own ('source: preview').
     PREVIEWS = False
+    # What 'preview' means on this site, for the 'source' parameter's
+    # description: '%s' is the site's TITLE.
+    PREVIEW_DESCRIPTION = "%s's own mesh of it, coarser and needing no login, where it has one"
     # For whoever logs in with nobody at the screen ('pc login --agent'): any
     # other way in than signing in with a browser - an API key and the page
     # that makes one - and what can be had without logging in at all.
@@ -618,8 +628,8 @@ class Site:
                 "default": "preview" if file.fallback else "original",
                 "enum": list(SOURCES),
                 "desc": "Which of the model's files, when 'file' does not say: 'original' (what the designer "
-                "uploaded), 'preview' (%s's own mesh of it, coarser and needing no login, where it has one) or "
-                "'auto' (the best original that can be had, else a preview)." % self.TITLE,
+                "uploaded), 'preview' (%s) or 'auto' (the best original that can be had, else a preview)."
+                % (self.PREVIEW_DESCRIPTION % self.TITLE),
             },
         }
         for name, desc in self.EXTRA_PARAMETERS.items():
