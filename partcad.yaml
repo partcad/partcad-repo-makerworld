@@ -1,11 +1,11 @@
 # PartCAD package: MakerWorld models as parts, served by a repository plugin.
 #
-# Published as //pub/universe/makerworld/models: this package is
-# //pub/universe/makerworld, and its one external dependency 'models' is served by
+# Published as //pub/collection/makerworld/models: this package is
+# //pub/collection/makerworld, and its one external dependency 'models' is served by
 # the makerworld_repo plugin. Nothing is listed - a model site's catalog is not
 # something to enumerate - so a part is asked for by name, and found with
 # 'pc search parts' (see the README).
-name: //pub/universe/makerworld
+name: //pub/collection/makerworld
 
 desc: |
   Models on MakerWorld (https://makerworld.com) as PartCAD parts, a part per
@@ -14,11 +14,10 @@ desc: |
   is fetched from MakerWorld when it is first built.
 url: https://makerworld.com/
 
-# The first PartCAD whose repository plugins may search their own catalog
-# ('searchKinds') and resolve a parametrized name themselves ('instanceKinds'),
-# which is what lets a parameter choose another file of a model, and that has
-# 'pc login'.
-partcad: ">=0.9.3"
+# The first PartCAD that has the toolkit this plugin is written with
+# (plugin_models), and hands a repository plugin the key it is asked for
+# taken apart ('query').
+partcad: ">=0.9.20"
 
 # An upload to a model site says nothing about whether, or how, it is made to
 # be manufactured. The plugin says the same of 'models' in its metadata.
@@ -34,10 +33,10 @@ docs:
   name: MakerWorld for PartCAD
   usage: |
     ```shell
-    pc search parts -P //pub/universe/makerworld/models -k "cable clip"
-    pc inspect //pub/universe/makerworld/models:1400000
-    pc inspect "//pub/universe/makerworld/models:1400000;source=preview"
-    pc inspect "//pub/universe/makerworld/models:1400000;format=stl"
+    pc search parts -P //pub/collection/makerworld/models -k "cable clip"
+    pc inspect //pub/collection/makerworld/models:1400000
+    pc inspect "//pub/collection/makerworld/models:1400000;source=preview"
+    pc inspect "//pub/collection/makerworld/models:1400000;format=stl"
     ```
 
 dependencies:
@@ -58,7 +57,7 @@ repositories:
     #   plugin's name - which is also where 'pc login' keeps the token:
     #
     #     parameters:
-    #       //pub/universe/makerworld:makerworld_repo:
+    #       //pub/collection/makerworld:makerworld_repo:
     #         formats: stl,3mf
     #
     # - or in a package of your own, as an enrich of the plugin and a package
@@ -69,7 +68,7 @@ repositories:
     #     repositories:
     #       meshes_repo:
     #         type: enrich
-    #         source: //pub/universe/makerworld:makerworld_repo
+    #         source: //pub/collection/makerworld:makerworld_repo
     #         with:
     #           formats: stl,3mf
     #     dependencies:
@@ -80,13 +79,13 @@ repositories:
     # A part's own parameters override these for that part. Every part takes
     # 'file' (one of the model's files, by name or by id - 'preview-<profile>'
     # for a print profile's preview), 'format' (its best file of that format:
-    # step, brep, 3mf, stl, obj, glb or scad) and 'source' (as below) - in its
+    # one of the 'formats' below) and 'source' (as below) - in its
     # name, '1400000;format=stl', or in the 'with' of an enrich of the part:
     #
     #     parts:
     #       clip:
     #         type: enrich
-    #         source: //pub/universe/makerworld/models:1400000
+    #         source: //pub/collection/makerworld/models:1400000
     #         with:
     #           format: stl
     parameters:
@@ -95,7 +94,9 @@ repositories:
         default: ""
         desc: >-
           The formats to take a model in, best first, separated by commas:
-          step, brep, 3mf, stl, obj, glb, scad. A format left out is not taken
+          step, brep, iges, 3mf, stl, obj, glb, usd, sldprt, ipt,
+          catpart, f3d, fcstd, sat, pvz, scad. A format left out is
+          not taken
           - 'stl,3mf' is meshes only - unless a part asks for it by its own
           'format' or 'file'. Empty is all of them, in that order.
       source:
@@ -117,7 +118,7 @@ repositories:
           The access token of a signed-in MakerWorld (Bambu Lab) account: the
           'token' cookie of makerworld.com. Only the designer's own files need
           it; a preview needs nothing. 'pc login
-          //pub/universe/makerworld:makerworld_repo' gets it in a browser and
+          //pub/collection/makerworld:makerworld_repo' gets it in a browser and
           keeps it in your ~/.partcad/config.yaml, under 'parameters' as above;
           'pc login --agent' says how to get it by hand, and takes it back with
           '--set token=...'. The MAKERWORLD_TOKEN environment variable gives it
