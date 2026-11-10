@@ -5,11 +5,11 @@
 #
 """A PartCAD 'basic' repository plugin that serves MakerWorld models as parts.
 
-Published as ``//pub/universe/makerworld/models``. Nothing is listed: a part is
+Published as ``//pub/collection/makerworld/models``. Nothing is listed: a part is
 asked for by the model's number (the one in makerworld.com/en/models/<number>),
 and is one file of that model.
 
-    1400000                          the model's best file (see remote_models.FORMATS)
+    1400000                          the model's best file (see plugin_models.FORMATS)
     1400000;format=step              its best STEP
     1400000;file=bracket.stl         one of its files, by name
     1400000;source=preview           the preview mesh of its first print profile
@@ -24,41 +24,31 @@ preview mesh - which the plugin's 'source' parameter can make it with one too.
 
 PartCAD runs this script once per key (via runpy) with the key in
 ``request["key"]``; the answer goes in ``output``. What the keys mean, and
-everything else that is the same for every model site, is in remote_models.py.
+everything else that is the same for every model site, is PartCAD's plugin_models.
 """
 
-import importlib.util
 import io
 import json
-import os
 import struct
-import sys
 import urllib.parse
 import zipfile
 
+# PartCAD's toolkit for model-site plugins: one of its wrappers, on the path of
+# every sandbox a plugin runs in, from PartCAD 0.9.20 on.
+import plugin_models as rm
+
 # When this plugin's answers stopped meaning what they meant before. PartCAD
 # keys everything it caches of this package on it, so raise it with any change
-# to what is answered - here or in remote_models.py.
+# to what is answered - here or in PartCAD's plugin_models.
 #
 # v1: models as parts, one per uploaded file and one per print profile's preview; and 'login'.
 # v2: a part's 'source' parameter, and the plugin's 'formats' and 'source' preferences;
 #     'login' says what to do with nobody at the screen.
-CACHE_VERSION = 2
+# v3: the toolkit is PartCAD's own (plugin_models): IGES, OpenUSD and the native
+#     formats of CAD applications are taken too, and a model's id is spelled in
+#     a file's path the way it is read back.
+CACHE_VERSION = 3
 
-
-def _shared():
-    """remote_models.py, beside this script, under a name of this plugin's own."""
-    name = "_partcad_makerworld_remote_models"
-    if name not in sys.modules:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "remote_models.py")
-        spec = importlib.util.spec_from_file_location(name, path)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        spec.loader.exec_module(module)
-    return sys.modules[name]
-
-
-rm = _shared()
 
 WEB = "https://makerworld.com"
 API = WEB + "/api/v1"

@@ -199,15 +199,6 @@ def test_partcad_runs_it_and_reads_the_answer_from_output():
     assert result["output"]["result"]["manufacturable"] is False
 
 
-def test_the_shared_module_is_the_one_every_model_site_plugin_has():
-    import hashlib
-
-    with open(os.path.join(_HERE, "remote_models.py"), "rb") as f:
-        digest = hashlib.sha256(f.read()).hexdigest()
-    with open(os.path.join(_HERE, "remote_models.sha256")) as f:
-        assert digest == f.read().split()[0], "remote_models.py differs from the shared copy: update all five"
-
-
 # --- logging in ----------------------------------------------------------------
 
 PROFILE = "https://api.bambulab.com/v1/user-service/my/profile"
