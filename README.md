@@ -129,6 +129,12 @@ parameters:
     token: "..."
 ```
 
+`token` is the package's, not only the plugin's: it says `shared: true`. With
+PartCAD 0.10.4 or later, `pc login` keeps it under the package,
+`"//pub/collection/makerworld":`, where an entry gives it to every object of the
+package; an entry for the plugin, as above, still works, and wins over the
+package's. An older PartCAD reads the plugin's entry only.
+
 The token is sent as a bearer token to `makerworld.com`'s own API, and to
 nothing else.
 
